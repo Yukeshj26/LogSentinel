@@ -1,0 +1,11 @@
+2026-07-24 09:15:32 user=jsmith ip=192.168.1.10 action=LOGIN status=200
+2026-07-24 09:16:05 user=jsmith ip=192.168.1.10 action=FILE_ACCESS status=200
+2026-07-24 09:20:11 user=admin ip=10.0.0.5 action=LOGIN_FAILED status=401
+2026-07-24 09:20:15 user=admin ip=10.0.0.5 action=LOGIN_FAILED status=401
+2026-07-24 09:20:19 user=admin ip=10.0.0.5 action=LOGIN_FAILED status=401
+Jul 24 09:25:44 secureserver sshd[1725]: Failed password for invalid user root from 203.0.113.55 port 51321 ssh2
+Jul 24 09:25:49 secureserver sshd[1726]: Failed password for invalid user root from 203.0.113.55 port 51325 ssh2
+Jul 24 09:26:02 secureserver sshd[1730]: Accepted password for jsmith from 192.168.1.10 port 51330 ssh2
+2026-07-24 09:30:00 user=guest ip=999.999.999.999 action=LOGIN status=200
+this line is not a valid log entry at all
+2026-07-24 09:35:10 user=bwayne ip=172.16.0.9 action=ACCESS_DENIED status=403

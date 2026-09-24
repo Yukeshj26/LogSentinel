@@ -1,0 +1,18 @@
+2026-07-24 08:00:00 user=jsmith ip=192.168.1.10 action=LOGIN status=200
+2026-07-24 08:05:00 user=jsmith ip=192.168.1.10 action=FILE_ACCESS status=200
+2026-07-24 08:10:00 user=jsmith ip=192.168.1.10 action=LOGOUT status=200
+Jul 24 08:15:00 secureserver sshd[2001]: Failed password for invalid user admin from 203.0.113.9 port 40001 ssh2
+Jul 24 08:15:05 secureserver sshd[2002]: Failed password for invalid user root from 203.0.113.9 port 40002 ssh2
+Jul 24 08:15:10 secureserver sshd[2003]: Failed password for invalid user test from 203.0.113.9 port 40003 ssh2
+Jul 24 08:15:15 secureserver sshd[2004]: Failed password for invalid user guest from 203.0.113.9 port 40004 ssh2
+Jul 24 08:15:20 secureserver sshd[2005]: Failed password for invalid user oracle from 203.0.113.9 port 40005 ssh2
+Jul 24 08:15:25 secureserver sshd[2006]: Failed password for invalid user postgres from 203.0.113.9 port 40006 ssh2
+2026-07-24 09:00:00 user=backupsvc ip=198.51.100.7 action=LOGIN_FAILED status=401
+2026-07-24 09:04:00 user=backupsvc ip=198.51.100.7 action=LOGIN_FAILED status=401
+2026-07-24 09:08:00 user=backupsvc ip=198.51.100.7 action=LOGIN_FAILED status=401
+2026-07-24 09:30:00 user=bwayne ip=172.16.0.9 action=ACCESS_DENIED status=403
+2026-07-24 10:00:00 user=jsmith ip=192.168.1.10 action=LOGIN status=200
+2026-07-24 10:05:00 user=jsmith ip=45.33.10.20 action=LOGIN status=200
+2026-07-24 10:10:00 user=jsmith ip=91.198.22.5 action=LOGIN status=200
+2026-07-24 10:30:00 user=guest ip=999.999.999.999 action=LOGIN status=200
+>>> corrupted binary data detected in log stream <<<

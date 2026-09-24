@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LogSentinel — Real-Time Security Log Analyzer</title>
+  <meta name="description" content="Real-time cybersecurity log analysis and threat detection. Monitor Windows Security events, detect brute-force attacks, and unauthorized access live." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="header" role="banner">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-icon" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14 2L3 7.5V14.5C3 20.3 7.8 25.7 14 27C20.2 25.7 25 20.3 25 14.5V7.5L14 2Z" fill="#1E3A5F" stroke="#3B82F6" stroke-width="1.5"/>
+            <path d="M10 14L13 17L18 11" stroke="#60A5FA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">LogSentinel</span>
+          <span class="brand-tagline">Real-Time Security Monitor</span>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <div class="admin-badge" id="adminBadge" style="display:none" title="Running with Administrator privileges — reading real Windows Security event logs">
+          <span class="admin-badge-dot"></span>
+          <span>REAL DEVICE LOGS</span>
+        </div>
+        <div class="live-indicator" id="liveIndicator" title="SSE connection status">
+          <span class="pulse-dot" id="pulseDot"></span>
+          <span class="live-label" id="liveLabel">Connecting...</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="toggleStreamBtn" aria-label="Toggle live stream">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="2" width="3" height="10" rx="0.5" fill="currentColor"/><rect x="8" y="2" width="3" height="10" rx="0.5" fill="currentColor"/></svg>
+          <span id="toggleStreamText">Pause</span>
+        </button>
+        <button class="btn btn-outline btn-sm" id="clearBtn" aria-label="Clear all data">Clear</button>
+      </div>
+    </div>
+
+    <!-- Demo mode banner -->
+    <div class="demo-banner" id="demoBanner" style="display:none" role="status">
+      <div class="demo-banner-left">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="7" stroke="#D97706" stroke-width="1.5"/><path d="M8 5v3M8 10.5v.5" stroke="#D97706" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span id="demoBannerText">Running in <strong>Demo Mode</strong> — simulated events shown. Real Windows Security logs require Administrator access.</span>
+      </div>
+      <div class="demo-banner-right" id="elevateControls">
+        <button class="btn-elevate" id="elevateBtn" aria-label="Enable real device logs by requesting admin rights">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M7 1L2 3.8v4.2c0 3.3 2.2 6.2 5 7 2.8-.8 5-3.7 5-7V3.8L7 1z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 7l1.5 1.5L9 5.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Enable Real Device Logs</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Elevation in-progress / status banner -->
+    <div class="elevate-banner" id="elevateBanner" style="display:none" role="status">
+      <div class="elevate-spinner" id="elevateSpinner"></div>
+      <span id="elevateBannerText">Requesting Administrator access... Check for the Windows UAC prompt on your screen.</span>
+      <span class="elevate-reconnect-hint" id="elevateReconnectHint">Waiting for elevated service...</span>
+    </div>
+  </header>
+
+  <main class="main-content" id="main">
+
+    <!-- STATS BAR -->
+    <section class="stats-bar" aria-label="Live statistics">
+      <div class="stat-card" id="statEvents">
+        <div class="stat-value" id="statEventsVal">0</div>
+        <div class="stat-label">Total Events</div>
+        <div class="stat-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+        </div>
+      </div>
+      <div class="stat-card stat-card--threat" id="statThreats">
+        <div class="stat-value" id="statThreatsVal">0</div>
+        <div class="stat-label">Threats Detected</div>
+        <div class="stat-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+        </div>
+      </div>
+      <div class="stat-card stat-card--failure" id="statFailures">
+        <div class="stat-value" id="statFailuresVal">0</div>
+        <div class="stat-label">Auth Failures</div>
+        <div class="stat-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#EA580C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        </div>
+      </div>
+      <div class="stat-card" id="statBuffer">
+        <div class="stat-value" id="statBufferVal">0</div>
+        <div class="stat-label">Detection Buffer</div>
+        <div class="stat-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0D9488" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- THREATS PANEL -->
+    <section class="panel" id="threatsPanel" aria-labelledby="threatsPanelTitle">
+      <div class="panel-header">
+        <h2 class="panel-title" id="threatsPanelTitle">
+          <span class="panel-title-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+          </span>
+          Active Threats
+          <span class="badge badge--count" id="threatCount">0</span>
+        </h2>
+        <div class="threat-severity-filter" role="group" aria-label="Filter by severity">
+          <button class="sev-filter-btn active" data-sev="ALL" id="sevFilterAll">All</button>
+          <button class="sev-filter-btn sev-filter-btn--critical" data-sev="CRITICAL" id="sevFilterCritical">Critical</button>
+          <button class="sev-filter-btn sev-filter-btn--high" data-sev="HIGH" id="sevFilterHigh">High</button>
+          <button class="sev-filter-btn sev-filter-btn--medium" data-sev="MEDIUM" id="sevFilterMedium">Medium</button>
+          <button class="sev-filter-btn sev-filter-btn--low" data-sev="LOW" id="sevFilterLow">Low</button>
+        </div>
+      </div>
+      <div class="threats-grid" id="threatsGrid">
+        <div class="empty-state" id="threatsEmpty">
+          <div class="empty-state-icon" aria-hidden="true">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+          </div>
+          <div class="empty-state-text">No threats detected yet</div>
+          <div class="empty-state-sub">Continuous heuristic & anomaly detection is active</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LOG STREAM TABLE -->
+    <section class="panel" id="logPanel" aria-labelledby="logPanelTitle">
+      <div class="panel-header">
+        <h2 class="panel-title" id="logPanelTitle">
+          <span class="panel-title-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+          </span>
+          Live Event Stream
+          <span class="badge badge--count" id="logCount">0</span>
+        </h2>
+        <div class="table-controls">
+          <select class="filter-select" id="filterAction" aria-label="Filter by action">
+            <option value="">All Actions</option>
+            <option value="LOGIN">Login</option>
+            <option value="LOGOUT">Logout</option>
+            <option value="FILE_ACCESS">File Access</option>
+            <option value="CREATE">Create</option>
+            <option value="DELETE">Delete</option>
+            <option value="UPDATE">Update</option>
+            <option value="EXECUTE">Execute</option>
+            <option value="NETWORK">Network</option>
+          </select>
+          <select class="filter-select" id="filterStatus" aria-label="Filter by status">
+            <option value="">All Statuses</option>
+            <option value="SUCCESS">Success</option>
+            <option value="FAILURE">Failure</option>
+            <option value="UNAUTHORIZED">Unauthorized</option>
+            <option value="NOT_FOUND">Not Found</option>
+            <option value="SERVER_ERROR">Server Error</option>
+          </select>
+          <input type="text" class="filter-input" id="filterIp" placeholder="Filter by IP..." aria-label="Filter by IP address" />
+        </div>
+      </div>
+
+      <div class="table-wrapper" role="region" aria-label="Log entries table" aria-live="polite">
+        <table class="log-table" id="logTable">
+          <thead>
+            <tr>
+              <th class="sortable" data-col="timestamp" id="thTimestamp" scope="col" tabindex="0" aria-sort="descending">Timestamp <span class="sort-icon"></span></th>
+              <th class="sortable" data-col="username" id="thUser" scope="col" tabindex="0">User <span class="sort-icon"></span></th>
+              <th class="sortable" data-col="ipAddress" id="thIp" scope="col" tabindex="0">IP Address <span class="sort-icon"></span></th>
+              <th class="sortable" data-col="action" id="thAction" scope="col" tabindex="0">Action <span class="sort-icon"></span></th>
+              <th class="sortable" data-col="statusCode" id="thStatus" scope="col" tabindex="0">Status <span class="sort-icon"></span></th>
+            </tr>
+          </thead>
+          <tbody id="logTableBody">
+          </tbody>
+        </table>
+        <div class="empty-state" id="logEmpty">
+          <div class="empty-state-icon" aria-hidden="true">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          </div>
+          <div class="empty-state-text">Awaiting log events...</div>
+          <div class="empty-state-sub">Events will stream here automatically as they are recorded</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- HISTORICAL FILE ANALYSIS -->
+    <section class="panel panel--collapsible" id="filePanel" aria-labelledby="filePanelTitle">
+      <button class="panel-header panel-header--toggle" id="filePanelToggle" aria-expanded="false" aria-controls="filePanelBody">
+        <h2 class="panel-title" id="filePanelTitle">
+          <span class="panel-title-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0D9488" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+          </span>
+          Historical File Analysis
+        </h2>
+        <span class="collapse-arrow" aria-hidden="true" id="collapseArrow">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </span>
+      </button>
+      <div class="panel-body" id="filePanelBody" hidden>
+        <div class="upload-area" id="dropZone" role="button" tabindex="0" aria-label="Drop log file here or click to browse">
+          <div class="upload-icon" aria-hidden="true">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+          </div>
+          <div class="upload-text">Drop a <strong>.log</strong>, <strong>.txt</strong>, or <strong>.evtx</strong> file here</div>
+          <div class="upload-sub">or <span class="upload-link" id="browseLink">click to browse</span></div>
+          <input type="file" id="fileInput" accept=".log,.txt,.evtx" style="display:none" aria-label="Select log file" />
+        </div>
+
+        <div class="separator-or"><span>or</span></div>
+
+        <div class="paste-area">
+          <label class="paste-label" for="pasteInput">Paste raw log text</label>
+          <textarea id="pasteInput" class="paste-textarea" rows="5" placeholder="2026-07-24 09:15:32 user=jsmith ip=192.168.1.10 action=LOGIN status=200&#10;Jul 24 09:25:44 server sshd[1725]: Failed password for root from 203.0.113.55 port 51321 ssh2"></textarea>
+          <button class="btn btn-primary" id="analyzePasteBtn" aria-label="Analyze pasted text">Analyze Text</button>
+        </div>
+
+        <!-- Analysis Results -->
+        <div class="analysis-results" id="analysisResults" style="display:none">
+          <div class="analysis-header">
+            <h3 class="analysis-title">Analysis Results</h3>
+            <div class="analysis-meta" id="analysisMeta"></div>
+          </div>
+          <div id="analysisContent"></div>
+        </div>
+
+        <div class="loading-overlay" id="fileLoading" style="display:none" role="status" aria-label="Analyzing...">
+          <div class="spinner"></div>
+          <span>Analyzing log file...</span>
+        </div>
+      </div>
+    </section>
+
+      <!-- Elevation Instructions Modal -->
+    <div class="modal-backdrop" id="elevateModal" style="display:none" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <div class="modal-title-wrap">
+            <div class="modal-icon" aria-hidden="true">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            </div>
+            <div>
+              <h3 class="modal-title" id="modalTitle">Enable Real Device Logs</h3>
+              <p class="modal-subtitle">Windows requires Administrator rights to read the Security Event Log</p>
+            </div>
+          </div>
+          <button class="modal-close" id="modalCloseBtn" aria-label="Close dialog">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="elevation-step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <h4>Option A — Run the Launcher Script (Fastest)</h4>
+              <p>We created <code>run-admin.bat</code> in your project. Click below to open its location, then right-click <code>run-admin.bat</code> and choose <strong>"Run as administrator"</strong>.</p>
+              <button class="btn btn-primary btn-sm" id="btnRevealFile" style="margin-top:8px">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                Open Project Folder in Explorer
+              </button>
+            </div>
+          </div>
+
+          <div class="elevation-step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <h4>Option B — Run via PowerShell</h4>
+              <p>Copy and paste this command into any PowerShell terminal:</p>
+              <div class="cmd-copy-box">
+                <code id="powershellCmdText">Start-Process powershell -Verb RunAs -ArgumentList "cd 'e:\loganalyzer'; .\run-admin.bat"</code>
+                <button class="btn btn-secondary btn-sm" id="btnCopyCmd">Copy</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="elevation-status-bar">
+            <div class="elevate-spinner"></div>
+            <span id="modalStatusText">Listening for elevated server on port 8080... (Auto-reconnects once running)</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline btn-sm" id="modalDismissBtn">Close</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer" role="contentinfo">
+    <span>LogSentinel &copy; 2026 &mdash; Real-Time Cybersecurity Log Analysis</span>
+    <span class="footer-sep">|</span>
+    <span id="footerStatus">Initializing...</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
