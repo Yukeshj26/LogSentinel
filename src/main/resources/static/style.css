@@ -438,10 +438,42 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  transition: transform var(--transition), box-shadow var(--transition);
+  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
   animation: fadeIn 200ms ease;
+  cursor: pointer;
+  position: relative;
+  outline: none;
 }
-.threat-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.threat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04);
+}
+.threat-card:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.threat-card-footer {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.threat-card-link {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color var(--transition);
+}
+.threat-card:hover .threat-card-link {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+}
 
 .threat-card[data-sev="CRITICAL"] { border-left: 4px solid var(--sev-critical); background: var(--sev-critical-bg); }
 .threat-card[data-sev="HIGH"]     { border-left: 4px solid var(--sev-high);     background: var(--sev-high-bg); }
@@ -904,4 +936,419 @@ body {
   background: #FAFBFD;
   display: flex;
   justify-content: flex-end;
+}
+
+/* === THREAT DETAIL FORENSIC MODAL === */
+.modal-dialog--wide {
+  max-width: 660px;
+}
+
+.sev-modal-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  display: inline-block;
+}
+.sev-modal-badge--CRITICAL { background: var(--sev-critical-bg); color: var(--sev-critical); border: 1px solid var(--sev-critical-border); }
+.sev-modal-badge--HIGH     { background: var(--sev-high-bg); color: var(--sev-high); border: 1px solid var(--sev-high-border); }
+.sev-modal-badge--MEDIUM   { background: var(--sev-medium-bg); color: var(--sev-medium); border: 1px solid var(--sev-medium-border); }
+.sev-modal-badge--LOW      { background: var(--sev-low-bg); color: var(--sev-low); border: 1px solid var(--sev-low-border); }
+
+.threat-desc-callout {
+  background: #F8FAFC;
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-navy);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+}
+.threat-desc-callout--CRITICAL { border-left-color: var(--sev-critical); background: #FEF2F2; }
+.threat-desc-callout--HIGH     { border-left-color: var(--sev-high); background: #FFF7ED; }
+.threat-desc-callout--MEDIUM   { border-left-color: var(--sev-medium); background: #FFFBEB; }
+.threat-desc-callout--LOW      { border-left-color: var(--sev-low); background: #F0FDF4; }
+
+.threat-desc-callout-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.threat-desc-callout-text {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.threat-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+@media (max-width: 500px) {
+  .threat-meta-grid { grid-template-columns: 1fr; }
+}
+
+.threat-meta-card {
+  background: #FAFBFD;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.threat-meta-card-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.threat-meta-card-val {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.threat-meta-card-val code {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  background: #EEF2F6;
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: #0F172A;
+}
+
+.threat-info-block {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+.threat-info-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.threat-info-text {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+.threat-remediation-list {
+  margin-top: 6px;
+  padding-left: 18px;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+.threat-remediation-list li {
+  margin-bottom: 4px;
+}
+
+/* === CLICKABLE ENTITIES (IP & USER) === */
+td.user, td.ip, .threat-meta-item code {
+  cursor: pointer;
+  transition: all var(--transition);
+}
+td.user:hover, td.ip:hover, .threat-meta-item code:hover {
+  color: var(--color-accent) !important;
+  text-decoration: underline;
+}
+td.user::after, td.ip::after {
+  content: ' ↗';
+  font-size: 0.68rem;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+td.user:hover::after, td.ip:hover::after {
+  opacity: 0.8;
+}
+
+/* === REAL-TIME VELOCITY TIMELINE === */
+.timeline-panel {
+  margin-bottom: 20px;
+}
+.timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.timeline-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.timeline-rate-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: #EFF6FF;
+  color: #2563EB;
+  border: 1px solid #BFDBFE;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  letter-spacing: 0.02em;
+}
+.timeline-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 0.74rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.legend-dot--events   { background: #2563EB; }
+.legend-dot--failures { background: #EA580C; }
+.legend-dot--threats  { background: #DC2626; }
+
+.timeline-body {
+  padding: 12px 16px 8px;
+  background: #FFFFFF;
+}
+.timeline-canvas-wrap {
+  width: 100%;
+  position: relative;
+}
+#velocityChart {
+  width: 100%;
+  display: block;
+  border-radius: var(--radius-sm);
+}
+
+/* === ENTITY FORENSIC DOSSIER DRAWER === */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 1040;
+  animation: fadeIn 0.2s ease;
+}
+.drawer {
+  position: fixed;
+  top: 0;
+  right: -460px;
+  bottom: 0;
+  width: 440px;
+  max-width: 92vw;
+  background: var(--color-surface);
+  box-shadow: -10px 0 35px rgba(0,0,0,0.18);
+  z-index: 1050;
+  display: flex;
+  flex-direction: column;
+  transition: right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+.drawer.open {
+  right: 0;
+}
+.drawer-header {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--color-border);
+  background: #FAFBFD;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.drawer-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.drawer-icon {
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: var(--radius-md);
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.drawer-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--color-accent);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.drawer-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+}
+.drawer-body {
+  padding: 20px 22px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+}
+.dossier-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.dossier-stat-card {
+  background: #FAFBFD;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+.dossier-stat-card-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+.dossier-stat-card-val {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-top: 2px;
+}
+.dossier-action-bar {
+  display: flex;
+  gap: 8px;
+}
+.dossier-timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dossier-log-row {
+  font-size: 0.78rem;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* === PRINTABLE EXECUTIVE REPORT MODAL === */
+.report-dialog {
+  max-width: 800px;
+}
+.report-body {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 24px 30px;
+  color: #0F172A;
+}
+.report-briefing-header {
+  border-bottom: 2px solid #0F172A;
+  padding-bottom: 14px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.report-brand-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #0F172A;
+}
+.report-brand-sub {
+  font-size: 0.8rem;
+  color: #475569;
+  margin-top: 2px;
+}
+.report-meta-box {
+  text-align: right;
+  font-size: 0.75rem;
+  color: #64748B;
+  line-height: 1.4;
+}
+.report-section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #1E293B;
+  border-left: 3px solid #2563EB;
+  padding-left: 8px;
+  margin: 18px 0 10px;
+}
+.report-kpi-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.report-kpi-box {
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  padding: 10px 14px;
+  background: #F8FAFC;
+}
+.report-kpi-box-num {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #0F172A;
+}
+.report-kpi-box-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+}
+
+/* === PRINT MEDIA === */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .report-dialog, .report-dialog * {
+    visibility: visible;
+  }
+  .report-dialog {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .report-body {
+    max-height: none !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
 }

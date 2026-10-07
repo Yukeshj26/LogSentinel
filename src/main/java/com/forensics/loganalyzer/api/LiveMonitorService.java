@@ -41,6 +41,14 @@ public class LiveMonitorService {
     private static final String[] DEMO_USERS = {"jsmith", "admin", "bwayne", "alice", "root", "guest", "sysadmin"};
     private static final String[] DEMO_IPS = {"192.168.1.10", "10.0.0.5", "203.0.113.9", "172.16.0.9", "45.33.10.20", "91.198.22.5", "198.51.100.7"};
     private final Random random = new Random();
+    private final com.forensics.loganalyzer.storage.StorageService storageService;
+
+    public LiveMonitorService(com.forensics.loganalyzer.storage.StorageService storageService) {
+        this.storageService = storageService;
+        this.totalEvents.set(storageService.getTotalLogsCount());
+        this.totalThreats.set(storageService.getTotalThreatsCount());
+        this.totalFailures.set(storageService.getTotalFailuresCount());
+    }
 
     public SseEmitter createEmitter() {
         SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
@@ -97,6 +105,9 @@ public class LiveMonitorService {
         totalEvents.addAndGet(newEntries.size());
         totalFailures.addAndGet(failures);
         totalThreats.addAndGet(newThreats.size());
+
+        storageService.saveLogEntries(newEntries, isDemo ? "DEMO_STREAM" : "WINDOWS_SECURITY");
+        storageService.saveThreats(newThreats, isDemo ? "DEMO_STREAM" : "WINDOWS_SECURITY");
 
         broadcast(newEntries, newThreats);
     }
@@ -155,6 +166,32 @@ public class LiveMonitorService {
 
     public Map<String, Object> getStatus() { return buildStatsMap(); }
     public boolean isDemoMode() { return demoMode.get(); }
+
+    public Map<String, Object> getInitialState() {
+        Map<String, Object> state = new LinkedHashMap<>();
+        List<LogEntryDto> recentLogs = storageService.getRecentLogs(100).stream()
+                .map(com.forensics.loganalyzer.storage.PersistedLogEntry::toLogEntry)
+                .map(LogEntryDto::from)
+                .toList();
+        List<ThreatEventDto> recentThreats = storageService.getRecentThreats(50).stream()
+                .map(com.forensics.loganalyzer.storage.PersistedThreat::toThreatEvent)
+                .map(ThreatEventDto::from)
+                .toList();
+
+        state.put("entries", recentLogs);
+        state.put("threats", recentThreats);
+        state.put("stats", buildStatsMap());
+        return state;
+    }
+
+    public void clearAll() {
+        streamingDetector.reset();
+        storageService.clearAll();
+        totalEvents.set(0);
+        totalThreats.set(0);
+        totalFailures.set(0);
+        broadcastRaw("stats", buildStatsMap());
+    }
 
     private List<LogEntry> generateDemoEntries() {
         List<LogEntry> entries = new ArrayList<>();

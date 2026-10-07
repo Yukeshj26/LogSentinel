@@ -41,11 +41,16 @@ const dom = {
   toggleBtn:       document.getElementById('toggleStreamBtn'),
   toggleText:      document.getElementById('toggleStreamText'),
   clearBtn:        document.getElementById('clearBtn'),
+  exportCsvBtn:    document.getElementById('exportCsvBtn'),
+  exportReportBtn: document.getElementById('exportReportBtn'),
 
   statEventsVal:   document.getElementById('statEventsVal'),
   statThreatsVal:  document.getElementById('statThreatsVal'),
   statFailuresVal: document.getElementById('statFailuresVal'),
   statBufferVal:   document.getElementById('statBufferVal'),
+
+  velocityChart:     document.getElementById('velocityChart'),
+  velocityRateBadge: document.getElementById('velocityRateBadge'),
 
   threatsGrid:     document.getElementById('threatsGrid'),
   threatsEmpty:    document.getElementById('threatsEmpty'),
@@ -76,7 +81,180 @@ const dom = {
   fileLoading:     document.getElementById('fileLoading'),
 
   footerStatus:    document.getElementById('footerStatus'),
+
+  threatDetailModal:        document.getElementById('threatDetailModal'),
+  threatModalTitle:         document.getElementById('threatModalTitle'),
+  threatModalSeverityBadge: document.getElementById('threatModalSeverityBadge'),
+  threatModalSubtitle:      document.getElementById('threatModalSubtitle'),
+  threatModalIcon:          document.getElementById('threatModalIcon'),
+  threatModalBody:          document.getElementById('threatModalBody'),
+  threatModalCloseBtn:      document.getElementById('threatModalCloseBtn'),
+  threatModalDismissBtn:    document.getElementById('threatModalDismissBtn'),
+
+  dossierDrawer:     document.getElementById('dossierDrawer'),
+  dossierBackdrop:   document.getElementById('dossierBackdrop'),
+  dossierCloseBtn:   document.getElementById('dossierCloseBtn'),
+  dossierBadge:      document.getElementById('dossierBadge'),
+  dossierTitle:      document.getElementById('dossierTitle'),
+  dossierBody:       document.getElementById('dossierBody'),
+
+  reportModal:           document.getElementById('reportModal'),
+  reportModalContent:     document.getElementById('reportModalContent'),
+  reportModalCloseBtn:   document.getElementById('reportModalCloseBtn'),
+  reportModalDismissBtn: document.getElementById('reportModalDismissBtn'),
+  reportPrintBtn:        document.getElementById('reportPrintBtn'),
 };
+
+// ── Real-Time Velocity Timeline ───────────────────
+const velocityHistory = [];
+const VELOCITY_POINTS = 50;
+let currentBucket = { events: 0, failures: 0, threats: 0 };
+
+for (let i = 0; i < VELOCITY_POINTS; i++) {
+  velocityHistory.push({ events: 0, failures: 0, threats: 0 });
+}
+
+function trackVelocityEvent(statusCode) {
+  currentBucket.events++;
+  const sc = String(statusCode || '').toUpperCase();
+  if (sc.includes('FAIL') || sc.includes('DENIED') || sc.includes('UNAUTH') || sc === '401' || sc === '403') {
+    currentBucket.failures++;
+  }
+}
+
+function trackVelocityThreat() {
+  currentBucket.threats++;
+}
+
+function tickVelocity() {
+  velocityHistory.push({ ...currentBucket });
+  if (velocityHistory.length > VELOCITY_POINTS) {
+    velocityHistory.shift();
+  }
+  const eps = currentBucket.events;
+  if (dom.velocityRateBadge) {
+    dom.velocityRateBadge.textContent = `${eps} eps`;
+  }
+  currentBucket = { events: 0, failures: 0, threats: 0 };
+  drawVelocityChart();
+}
+
+function drawVelocityChart() {
+  const canvas = dom.velocityChart;
+  if (!canvas) return;
+  const parent = canvas.parentElement;
+  if (!parent) return;
+
+  const width = parent.clientWidth || 600;
+  const height = 95;
+  const dpr = window.devicePixelRatio || 1;
+
+  if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+  }
+
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, width, height);
+
+  let maxVal = 5;
+  for (const pt of velocityHistory) {
+    if (pt.events > maxVal) maxVal = pt.events;
+    if (pt.failures > maxVal) maxVal = pt.failures;
+    if (pt.threats > maxVal) maxVal = pt.threats;
+  }
+  maxVal = Math.ceil(maxVal * 1.25);
+
+  const paddingLeft = 8;
+  const paddingRight = 8;
+  const paddingTop = 12;
+  const paddingBottom = 16;
+  const chartW = width - paddingLeft - paddingRight;
+  const chartH = height - paddingTop - paddingBottom;
+  const stepX = chartW / (VELOCITY_POINTS - 1);
+
+  // Background grid
+  ctx.strokeStyle = '#F1F5F9';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 3; i++) {
+    const y = paddingTop + (chartH / 3) * i;
+    ctx.beginPath();
+    ctx.moveTo(paddingLeft, y);
+    ctx.lineTo(width - paddingRight, y);
+    ctx.stroke();
+  }
+
+  function drawSeries(key, strokeColor, fillColor, lineWidth) {
+    ctx.beginPath();
+    for (let i = 0; i < velocityHistory.length; i++) {
+      const val = velocityHistory[i][key];
+      const x = paddingLeft + i * stepX;
+      const y = paddingTop + chartH - (val / maxVal) * chartH;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    if (fillColor) {
+      ctx.save();
+      const lastX = paddingLeft + (velocityHistory.length - 1) * stepX;
+      const firstX = paddingLeft;
+      const baselineY = paddingTop + chartH;
+      ctx.lineTo(lastX, baselineY);
+      ctx.lineTo(firstX, baselineY);
+      ctx.closePath();
+      ctx.fillStyle = fillColor;
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+  }
+
+  // 1. Total events (blue with gradient)
+  const grad = ctx.createLinearGradient(0, paddingTop, 0, paddingTop + chartH);
+  grad.addColorStop(0, 'rgba(37, 99, 235, 0.2)');
+  grad.addColorStop(1, 'rgba(37, 99, 235, 0.01)');
+  drawSeries('events', '#2563EB', grad, 2);
+
+  // 2. Failures (orange)
+  drawSeries('failures', '#EA580C', null, 1.8);
+
+  // 3. Threats (red dots)
+  for (let i = 0; i < velocityHistory.length; i++) {
+    const threatVal = velocityHistory[i].threats;
+    if (threatVal > 0) {
+      const x = paddingLeft + i * stepX;
+      const y = paddingTop + chartH - (threatVal / maxVal) * chartH;
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#DC2626';
+      ctx.fill();
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+
+  // Baseline
+  ctx.strokeStyle = '#E2E8F0';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(paddingLeft, paddingTop + chartH);
+  ctx.lineTo(width - paddingRight, paddingTop + chartH);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function initVelocityChart() {
+  setInterval(tickVelocity, 1000);
+  window.addEventListener('resize', drawVelocityChart);
+  drawVelocityChart();
+}
 
 // ── SSE Stream ───────────────────────────────────
 function connectSSE() {
@@ -95,6 +273,7 @@ function connectSSE() {
       const entry = JSON.parse(e.data);
       state.entries.unshift(entry);
       if (state.entries.length > 500) state.entries.pop();
+      trackVelocityEvent(entry.statusCode);
       renderTableRow(entry, true);
       updateLogCount();
     } catch (err) { console.error('Error parsing log-entry:', err); }
@@ -105,6 +284,7 @@ function connectSSE() {
     try {
       const threat = JSON.parse(e.data);
       state.threats.unshift(threat);
+      trackVelocityThreat();
       renderThreatCard(threat);
       updateThreatCount();
       flashThreatPanel();
@@ -329,6 +509,9 @@ function renderThreatCard(threat) {
   card.className = 'threat-card';
   card.dataset.sev = threat.severity;
   card.dataset.key = threat.type + '|' + threat.username + '|' + threat.ipAddress;
+  card.tabIndex = 0;
+  card.setAttribute('role', 'button');
+  card.setAttribute('aria-label', `View details for threat: ${threat.type}`);
   const fillPct = Math.min(100, threat.score).toFixed(0);
 
   card.innerHTML = `
@@ -345,7 +528,18 @@ function renderThreatCard(threat) {
       ${threat.ipAddress ? `<div class="threat-meta-item"><span>IP:</span> <code>${escHtml(threat.ipAddress)}</code></div>` : ''}
       <div class="threat-meta-item"><span>Time:</span> ${escHtml(formatTimestamp(threat.detectedAt))}</div>
       <div class="threat-meta-item"><span>Events:</span> ${threat.contributingCount}</div>
+    </div>
+    <div class="threat-card-footer">
+      <span class="threat-card-link">View full incident description &rarr;</span>
     </div>`;
+
+  card.addEventListener('click', () => openThreatDetailModal(threat));
+  card.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openThreatDetailModal(threat);
+    }
+  });
 
   const existing = dom.threatsGrid.querySelector(`[data-key="${card.dataset.key}"]`);
   if (existing) {
@@ -354,6 +548,191 @@ function renderThreatCard(threat) {
     dom.threatsGrid.insertBefore(card, dom.threatsGrid.firstChild);
   }
   applyThreatSeverityFilter();
+}
+
+function openThreatDetailModal(threat) {
+  if (!threat || !dom.threatDetailModal) return;
+
+  const sev = threat.severity || 'UNKNOWN';
+  const typeFormatted = (threat.type || 'THREAT').replace(/_/g, ' ');
+  const fillPct = Math.min(100, threat.score || 0).toFixed(0);
+
+  if (dom.threatModalTitle) dom.threatModalTitle.textContent = typeFormatted;
+  if (dom.threatModalSeverityBadge) {
+    dom.threatModalSeverityBadge.textContent = sev;
+    dom.threatModalSeverityBadge.className = `sev-modal-badge sev-modal-badge--${sev}`;
+  }
+
+  if (dom.threatModalSubtitle) {
+    if (threat.detectedAt) {
+      dom.threatModalSubtitle.textContent = `Detected at ${formatTimestamp(threat.detectedAt)} (${formatTimestamp24(threat.detectedAt)} UTC)`;
+    } else {
+      dom.threatModalSubtitle.textContent = 'Incident Forensics & Threat Breakdown';
+    }
+  }
+
+  const iconStroke = sev === 'CRITICAL' ? 'var(--sev-critical)' :
+                     sev === 'HIGH'     ? 'var(--sev-high)' :
+                     sev === 'MEDIUM'   ? 'var(--sev-medium)' : 'var(--sev-low)';
+
+  if (dom.threatModalIcon) {
+    dom.threatModalIcon.innerHTML = `
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${iconStroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>`;
+  }
+
+  let riskAnalysis = '';
+  let remediationList = [];
+
+  switch (threat.type) {
+    case 'BRUTE_FORCE':
+      riskAnalysis = 'Automated rapid authentication burst detected exceeding threshold limits. An adversary or automated tool is repeatedly submitting credentials to compromise valid account credentials.';
+      remediationList = [
+        `Temporarily or permanently block IP <strong>${escHtml(threat.ipAddress || 'origin')}</strong> at the network firewall / WAF.`,
+        `Inspect target user account <strong>${escHtml(threat.username || 'targeted accounts')}</strong> for potential lockout or compromise.`,
+        'Enforce Multi-Factor Authentication (MFA) and lock accounts after multiple consecutive failed attempts.'
+      ];
+      break;
+    case 'REPEATED_LOGIN_FAILURE':
+      riskAnalysis = 'Persistent failed login attempts observed across a sliding time window. This velocity profile suggests password guessing, spray attempts, or an improperly configured integration.';
+      remediationList = [
+        `Verify whether IP <strong>${escHtml(threat.ipAddress || 'origin')}</strong> belongs to an authorized internal host or unknown external address.`,
+        'Audit recent authentication logs for common targeted account usernames.',
+        'Consider enabling automated IP tarpitting or progressive authentication delays.'
+      ];
+      break;
+    case 'UNAUTHORIZED_ACCESS':
+      riskAnalysis = 'Access was explicitly denied to a protected resource, privileged endpoint, or critical system file. This pattern indicates unauthorized lateral movement or privilege escalation attempts.';
+      remediationList = [
+        `Review privileges and permissions assigned to <strong>${escHtml(threat.username || 'this user account')}</strong>.`,
+        'Validate if access attempt was originating from an approved workstation or network zone.',
+        'Check directory access control lists (ACLs) and security group memberships.'
+      ];
+      break;
+    case 'ANOMALOUS_BEHAVIOR':
+      riskAnalysis = 'Account authenticated from 3 or more distinct IP addresses in a condensed time window. This anomaly suggests stolen credentials, token hijacking, or simultaneous multi-location logons.';
+      remediationList = [
+        `Immediately verify identity of user <strong>${escHtml(threat.username || 'account')}</strong> and revoke active session tokens.`,
+        'Require an immediate mandatory password reset with MFA validation.',
+        'Inspect geolocation and ASN ownership of the contributing IP addresses.'
+      ];
+      break;
+    default:
+      riskAnalysis = 'Activity violated security detection baseline rules and generated a high-confidence threat notification.';
+      remediationList = [
+        'Review recent network traffic and process execution associated with this host.',
+        'Correlate with system audit and authentication event streams.'
+      ];
+  }
+
+  if (dom.threatModalBody) {
+    dom.threatModalBody.innerHTML = `
+      <div class="threat-desc-callout threat-desc-callout--${sev}">
+        <div class="threat-desc-callout-label">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          Full Threat Description
+        </div>
+        <div class="threat-desc-callout-text">${escHtml(threat.description)}</div>
+      </div>
+
+      <div class="threat-meta-grid">
+        <div class="threat-meta-card">
+          <span class="threat-meta-card-label">Source IP Address</span>
+          <div class="threat-meta-card-val">
+            ${threat.ipAddress ? `<code id="modalThreatIp" style="cursor:pointer;color:var(--color-accent);" title="Click to view IP forensic dossier">${escHtml(threat.ipAddress)} ↗</code>` : '<span style="color:var(--color-text-muted)">N/A (Multi-IP / Internal)</span>'}
+          </div>
+        </div>
+        <div class="threat-meta-card">
+          <span class="threat-meta-card-label">Target User Account</span>
+          <div class="threat-meta-card-val">
+            ${threat.username ? `<code id="modalThreatUser" style="cursor:pointer;color:var(--color-accent);" title="Click to view User forensic dossier">${escHtml(threat.username)} ↗</code>` : '<span style="color:var(--color-text-muted)">Unspecified / Multiple</span>'}
+          </div>
+        </div>
+        <div class="threat-meta-card">
+          <span class="threat-meta-card-label">Risk Severity &amp; Score</span>
+          <div class="threat-meta-card-val">
+            <span class="sev-modal-badge sev-modal-badge--${sev}">${sev}</span>
+            <span style="font-size:0.8rem;color:var(--color-text-secondary);font-weight:600">${fillPct} / 100</span>
+          </div>
+        </div>
+        <div class="threat-meta-card">
+          <span class="threat-meta-card-label">Contributing Security Events</span>
+          <div class="threat-meta-card-val">
+            <span>${threat.contributingCount} correlated log entries</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="threat-info-block">
+        <div class="threat-info-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 16v-4"></path>
+            <path d="M12 8h.01"></path>
+          </svg>
+          Security Analysis &amp; Impact
+        </div>
+        <p class="threat-info-text">${riskAnalysis}</p>
+      </div>
+
+      <div class="threat-info-block">
+        <div class="threat-info-title" style="color:var(--sev-critical);">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+          Recommended SOC Remediation Steps
+        </div>
+        <ul class="threat-remediation-list">
+          ${remediationList.map(item => `<li>${item}</li>`).join('')}
+        </ul>
+      </div>
+    `;
+
+    const modalIp = dom.threatModalBody.querySelector('#modalThreatIp');
+    if (modalIp && threat.ipAddress) {
+      modalIp.addEventListener('click', () => {
+        closeThreatDetailModal();
+        openDossier('ip', threat.ipAddress);
+      });
+    }
+    const modalUser = dom.threatModalBody.querySelector('#modalThreatUser');
+    if (modalUser && threat.username) {
+      modalUser.addEventListener('click', () => {
+        closeThreatDetailModal();
+        openDossier('user', threat.username);
+      });
+    }
+  }
+
+  dom.threatDetailModal.style.display = 'flex';
+}
+
+function closeThreatDetailModal() {
+  if (dom.threatDetailModal) {
+    dom.threatDetailModal.style.display = 'none';
+  }
+}
+
+function setupThreatModal() {
+  if (dom.threatModalCloseBtn) dom.threatModalCloseBtn.addEventListener('click', closeThreatDetailModal);
+  if (dom.threatModalDismissBtn) dom.threatModalDismissBtn.addEventListener('click', closeThreatDetailModal);
+  if (dom.threatDetailModal) {
+    dom.threatDetailModal.addEventListener('click', (e) => {
+      if (e.target === dom.threatDetailModal) closeThreatDetailModal();
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && dom.threatDetailModal && dom.threatDetailModal.style.display !== 'none') {
+      closeThreatDetailModal();
+    }
+  });
 }
 
 function updateThreatCount() {
@@ -383,11 +762,27 @@ function renderTableRow(entry, prepend) {
 
   tr.innerHTML = `
     <td class="ts" title="${escHtml(formatTimestamp24(entry.timestamp))} (24h)">${escHtml(formatTimestamp(entry.timestamp))}</td>
-    <td class="user">${escHtml(entry.username || '—')}</td>
-    <td class="ip">${escHtml(entry.ipAddress || '—')}</td>
+    <td class="user" title="${entry.username ? 'Click to inspect ' + escHtml(entry.username) + ' forensic dossier' : ''}">${escHtml(entry.username || '—')}</td>
+    <td class="ip" title="${entry.ipAddress ? 'Click to inspect ' + escHtml(entry.ipAddress) + ' forensic dossier' : ''}">${escHtml(entry.ipAddress || '—')}</td>
     <td><span class="action-badge action--${escHtml(entry.action)}">${escHtml(entry.action.replace(/_/g,' '))}</span></td>
     <td><span class="status-badge badge--${escHtml(entry.statusCode)}">${escHtml(entry.statusCode.replace(/_/g,' '))}</span></td>
   `;
+
+  const userTd = tr.querySelector('td.user');
+  if (userTd && entry.username) {
+    userTd.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openDossier('user', entry.username);
+    });
+  }
+
+  const ipTd = tr.querySelector('td.ip');
+  if (ipTd && entry.ipAddress) {
+    ipTd.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openDossier('ip', entry.ipAddress);
+    });
+  }
 
   if (prepend && dom.logTableBody.firstChild) {
     dom.logTableBody.insertBefore(tr, dom.logTableBody.firstChild);
@@ -548,10 +943,10 @@ async function handlePasteAnalysis() {
   if (!text) return;
   showFileLoading(true);
   try {
-    const resp = await fetch('/api/analyze/paste', {
+    const resp = await fetch('/api/analyze/text', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rawText: text }),
+      headers: { 'Content-Type': 'text/plain' },
+      body: text,
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
@@ -593,6 +988,9 @@ function renderAnalysisResults(data, source) {
           ${t.username ? `<div class="threat-meta-item"><span>User:</span> <code>${escHtml(t.username)}</code></div>` : ''}
           ${t.ipAddress ? `<div class="threat-meta-item"><span>IP:</span> <code>${escHtml(t.ipAddress)}</code></div>` : ''}
           <div class="threat-meta-item"><span>Events:</span> ${t.contributingCount}</div>
+        </div>
+        <div class="threat-card-footer">
+          <span class="threat-card-link">View full incident description &rarr;</span>
         </div>
       </div>`;
     });
@@ -644,6 +1042,25 @@ function renderAnalysisResults(data, source) {
 
   dom.analysisContent.innerHTML = html;
   dom.analysisResults.style.display = 'block';
+
+  if (data.threats && data.threats.length > 0) {
+    const cards = dom.analysisContent.querySelectorAll('.threat-card');
+    cards.forEach((card, idx) => {
+      const threat = data.threats[idx];
+      if (threat) {
+        card.tabIndex = 0;
+        card.setAttribute('role', 'button');
+        card.setAttribute('aria-label', `View details for threat: ${threat.type}`);
+        card.addEventListener('click', () => openThreatDetailModal(threat));
+        card.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            openThreatDetailModal(threat);
+          }
+        });
+      }
+    });
+  }
 }
 
 function renderAnalysisError(msg) {
@@ -666,6 +1083,7 @@ function setupStreamControls() {
   });
 
   dom.clearBtn.addEventListener('click', () => {
+    fetch('/api/history', { method: 'DELETE' }).catch(() => {});
     state.entries = [];
     state.threats = [];
     dom.logTableBody.innerHTML = '';
@@ -676,6 +1094,40 @@ function setupStreamControls() {
     updateThreatCount();
     updateLogCount();
   });
+}
+
+// ── Load persisted history on page load / refresh ───
+async function loadHistory() {
+  try {
+    const resp = await fetch('/api/history');
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    if (data.stats) {
+      updateStats(data.stats);
+    }
+
+    if (data.entries && data.entries.length > 0) {
+      state.entries = data.entries.slice(0, 500);
+      dom.logTableBody.innerHTML = '';
+      dom.logEmpty.style.display = 'none';
+      state.entries.forEach(entry => {
+        renderTableRow(entry, false);
+      });
+      updateLogCount();
+    }
+
+    if (data.threats && data.threats.length > 0) {
+      dom.threatsEmpty.style.display = 'none';
+      state.threats = data.threats;
+      state.threats.slice().reverse().forEach(threat => {
+        renderThreatCard(threat);
+      });
+      updateThreatCount();
+    }
+  } catch (err) {
+    console.warn('Could not load history on startup:', err);
+  }
 }
 
 // ── Initial admin status check ───────────────────
@@ -767,6 +1219,341 @@ function updateFooterTime() {
   }
 }
 
+// ── Forensic Dossier Drawer ───────────────────────
+async function openDossier(type, value) {
+  if (!value || value === '—' || value === 'N/A' || !dom.dossierDrawer) return;
+
+  dom.dossierBadge.textContent = type === 'user' ? 'USER IDENTITY DOSSIER' : 'IP ADDRESS DOSSIER';
+  dom.dossierTitle.textContent = value;
+  dom.dossierBody.innerHTML = `
+    <div class="loading-overlay" style="padding:40px 0;">
+      <div class="spinner"></div>
+      <span>Querying database &amp; correlating forensic history...</span>
+    </div>
+  `;
+
+  dom.dossierDrawer.classList.add('open');
+  dom.dossierDrawer.setAttribute('aria-hidden', 'false');
+  if (dom.dossierBackdrop) dom.dossierBackdrop.style.display = 'block';
+
+  try {
+    const res = await fetch(`/api/dossier?type=${encodeURIComponent(type)}&value=${encodeURIComponent(value)}`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    renderDossierContent(data);
+  } catch (err) {
+    dom.dossierBody.innerHTML = `
+      <div class="error-item">
+        <div class="error-line">Forensic Lookup Error</div>
+        <div class="error-reason">Could not load dossier for ${escHtml(value)}: ${escHtml(err.message)}</div>
+      </div>
+    `;
+  }
+}
+
+function closeDossier() {
+  if (dom.dossierDrawer) {
+    dom.dossierDrawer.classList.remove('open');
+    dom.dossierDrawer.setAttribute('aria-hidden', 'true');
+  }
+  if (dom.dossierBackdrop) {
+    dom.dossierBackdrop.style.display = 'none';
+  }
+}
+
+function setupDossier() {
+  if (dom.dossierCloseBtn) {
+    dom.dossierCloseBtn.addEventListener('click', closeDossier);
+  }
+  if (dom.dossierBackdrop) {
+    dom.dossierBackdrop.addEventListener('click', closeDossier);
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && dom.dossierDrawer && dom.dossierDrawer.classList.contains('open')) {
+      closeDossier();
+    }
+  });
+}
+
+function renderDossierContent(dossier) {
+  const isUser = dossier.type === 'user';
+  const total = dossier.totalEvents || 0;
+  const fails = dossier.failureCount || 0;
+  const successes = dossier.successCount || 0;
+  const failRate = total > 0 ? Math.round((fails / total) * 100) : 0;
+  const threats = dossier.threats || [];
+  const logs = dossier.recentLogs || [];
+
+  let threatsHtml = '';
+  if (threats.length > 0) {
+    threatsHtml = `
+      <div>
+        <div style="font-size:0.75rem;font-weight:700;color:var(--sev-critical);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
+          Correlated Threats (${threats.length})
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${threats.map(t => `
+            <div style="background:var(--sev-critical-bg);border:1px solid var(--sev-critical-border);border-radius:var(--radius-sm);padding:8px 10px;font-size:0.75rem;">
+              <div style="display:flex;justify-content:space-between;font-weight:700;color:var(--sev-critical);">
+                <span>${escHtml(t.type.replace(/_/g, ' '))}</span>
+                <span class="sev-badge sev-badge--${escHtml(t.severity)}">${escHtml(t.severity)}</span>
+              </div>
+              <div style="color:var(--color-text-secondary);margin-top:2px;">${escHtml(t.description)}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  let logsHtml = '';
+  if (logs.length > 0) {
+    logsHtml = `
+      <div>
+        <div style="font-size:0.75rem;font-weight:700;color:var(--color-text-secondary);text-transform:uppercase;margin-bottom:8px;">
+          Recent Ingested Activity (${logs.length})
+        </div>
+        <div class="dossier-timeline-list">
+          ${logs.slice(0, 15).map(l => `
+            <div class="dossier-log-row">
+              <div>
+                <span style="font-weight:600;color:var(--color-text-primary);">${escHtml(isUser ? (l.ipAddress || 'Internal') : (l.username || 'System'))}</span>
+                <span style="font-size:0.7rem;color:var(--color-text-muted);display:block;">${escHtml(formatTimestamp(l.timestamp))}</span>
+              </div>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <span class="action-badge action--${escHtml(l.action)}">${escHtml(l.action.replace(/_/g,' '))}</span>
+                <span class="status-badge badge--${escHtml(l.statusCode)}">${escHtml(l.statusCode.replace(/_/g,' '))}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  } else {
+    logsHtml = `<div class="empty-state" style="padding:20px 0;"><div class="empty-state-text">No activity records logged</div></div>`;
+  }
+
+  dom.dossierBody.innerHTML = `
+    <div class="dossier-stat-grid">
+      <div class="dossier-stat-card">
+        <div class="dossier-stat-card-label">Total Events</div>
+        <div class="dossier-stat-card-val">${total}</div>
+      </div>
+      <div class="dossier-stat-card">
+        <div class="dossier-stat-card-label">Threat Incidents</div>
+        <div class="dossier-stat-card-val" style="color:${threats.length > 0 ? 'var(--sev-critical)' : 'inherit'}">${threats.length}</div>
+      </div>
+      <div class="dossier-stat-card">
+        <div class="dossier-stat-card-label">Auth Failures</div>
+        <div class="dossier-stat-card-val" style="color:${fails > 0 ? 'var(--sev-high)' : 'inherit'}">${fails}</div>
+      </div>
+      <div class="dossier-stat-card">
+        <div class="dossier-stat-card-label">Failure Rate</div>
+        <div class="dossier-stat-card-val">${failRate}%</div>
+      </div>
+    </div>
+
+    <div class="dossier-action-bar">
+      <button class="btn btn-secondary btn-sm" id="dossierFilterBtn" style="flex:1;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+        Filter Table to this ${isUser ? 'User' : 'IP'}
+      </button>
+      <button class="btn btn-outline btn-sm" id="dossierCopyBtn" title="Copy entity name">
+        Copy
+      </button>
+    </div>
+
+    ${threatsHtml}
+    ${logsHtml}
+  `;
+
+  const filterBtn = document.getElementById('dossierFilterBtn');
+  if (filterBtn) {
+    filterBtn.addEventListener('click', () => {
+      if (isUser) {
+        dom.filterIp.value = dossier.value;
+        state.filterIp = dossier.value;
+      } else {
+        dom.filterIp.value = dossier.value;
+        state.filterIp = dossier.value;
+      }
+      reFilterTable();
+      closeDossier();
+    });
+  }
+
+  const copyBtn = document.getElementById('dossierCopyBtn');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(dossier.value).then(() => {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+      });
+    });
+  }
+}
+
+// ── CSV & Executive Incident Report Export ─────────
+function setupExportFeatures() {
+  if (dom.exportCsvBtn) {
+    dom.exportCsvBtn.addEventListener('click', () => {
+      window.location.href = '/api/export/csv';
+    });
+  }
+
+  if (dom.exportReportBtn) {
+    dom.exportReportBtn.addEventListener('click', openReportModal);
+  }
+
+  if (dom.reportModalCloseBtn) {
+    dom.reportModalCloseBtn.addEventListener('click', closeReportModal);
+  }
+  if (dom.reportModalDismissBtn) {
+    dom.reportModalDismissBtn.addEventListener('click', closeReportModal);
+  }
+  if (dom.reportPrintBtn) {
+    dom.reportPrintBtn.addEventListener('click', () => {
+      window.print();
+    });
+  }
+  if (dom.reportModal) {
+    dom.reportModal.addEventListener('click', (e) => {
+      if (e.target === dom.reportModal) closeReportModal();
+    });
+  }
+}
+
+function closeReportModal() {
+  if (dom.reportModal) dom.reportModal.style.display = 'none';
+}
+
+function openReportModal() {
+  if (!dom.reportModal || !dom.reportModalContent) return;
+
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const timeStr = now.toLocaleTimeString('en-US', { hour12: true });
+
+  const totalEvents = state.totalEvents || state.entries.length;
+  const totalThreats = state.threats.length;
+  const critCount = state.threats.filter(t => t.severity === 'CRITICAL').length;
+  const highCount = state.threats.filter(t => t.severity === 'HIGH').length;
+  const medCount = state.threats.filter(t => t.severity === 'MEDIUM').length;
+
+  const ipCounts = {};
+  const userCounts = {};
+  state.entries.forEach(e => {
+    if (e.ipAddress) ipCounts[e.ipAddress] = (ipCounts[e.ipAddress] || 0) + 1;
+    if (e.username) userCounts[e.username] = (userCounts[e.username] || 0) + 1;
+  });
+
+  const topIps = Object.entries(ipCounts).sort((a,b) => b[1] - a[1]).slice(0, 5);
+  const topUsers = Object.entries(userCounts).sort((a,b) => b[1] - a[1]).slice(0, 5);
+
+  let threatsTableRows = '';
+  if (state.threats.length > 0) {
+    threatsTableRows = state.threats.map(t => `
+      <tr>
+        <td style="padding:8px 10px;border-bottom:1px solid #E2E8F0;font-size:0.76rem;font-weight:600;">
+          <span class="sev-badge sev-badge--${escHtml(t.severity)}">${escHtml(t.severity)}</span>
+        </td>
+        <td style="padding:8px 10px;border-bottom:1px solid #E2E8F0;font-size:0.78rem;font-weight:600;">${escHtml(t.type.replace(/_/g, ' '))}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #E2E8F0;font-size:0.76rem;font-family:var(--font-mono);">${escHtml(t.ipAddress || '—')}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #E2E8F0;font-size:0.76rem;font-family:var(--font-mono);">${escHtml(t.username || '—')}</td>
+        <td style="padding:8px 10px;border-bottom:1px solid #E2E8F0;font-size:0.74rem;color:#475569;">${escHtml(t.description)}</td>
+      </tr>
+    `).join('');
+  } else {
+    threatsTableRows = `<tr><td colspan="5" style="text-align:center;padding:16px;color:#64748B;">No threat incidents detected during this monitoring period.</td></tr>`;
+  }
+
+  dom.reportModalContent.innerHTML = `
+    <div class="report-briefing-header">
+      <div>
+        <div class="report-brand-title">LogSentinel SOC Incident Briefing</div>
+        <div class="report-brand-sub">Real-Time Threat Detection &amp; Forensic Audit Record</div>
+      </div>
+      <div class="report-meta-box">
+        <div><strong>Date:</strong> ${dateStr} at ${timeStr}</div>
+        <div><strong>Status:</strong> ${state.isAdmin ? 'Live Device Auditing (Admin)' : 'Live Event Streaming'}</div>
+        <div><strong>Classification:</strong> RESTRICTED / INTERNAL SOC USE</div>
+      </div>
+    </div>
+
+    <div class="report-section-title">Executive Summary</div>
+    <div class="report-kpi-summary">
+      <div class="report-kpi-box">
+        <div class="report-kpi-box-num">${totalEvents}</div>
+        <div class="report-kpi-box-label">Events Audited</div>
+      </div>
+      <div class="report-kpi-box">
+        <div class="report-kpi-box-num" style="color:#DC2626;">${totalThreats}</div>
+        <div class="report-kpi-box-label">Threats Detected</div>
+      </div>
+      <div class="report-kpi-box">
+        <div class="report-kpi-box-num" style="color:#DC2626;">${critCount}</div>
+        <div class="report-kpi-box-label">Critical Severity</div>
+      </div>
+      <div class="report-kpi-box">
+        <div class="report-kpi-box-num" style="color:#EA580C;">${state.totalFailures}</div>
+        <div class="report-kpi-box-label">Auth Failures</div>
+      </div>
+    </div>
+
+    <div class="report-section-title">Detected Threat Findings &amp; Mitigations</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;border:1px solid #CBD5E1;border-radius:6px;overflow:hidden;">
+      <thead>
+        <tr style="background:#F1F5F9;text-align:left;font-size:0.72rem;color:#475569;text-transform:uppercase;">
+          <th style="padding:8px 10px;border-bottom:1px solid #CBD5E1;">Severity</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #CBD5E1;">Threat Vector</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #CBD5E1;">Source IP</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #CBD5E1;">User Target</th>
+          <th style="padding:8px 10px;border-bottom:1px solid #CBD5E1;">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${threatsTableRows}
+      </tbody>
+    </table>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+      <div>
+        <div class="report-section-title" style="margin-top:0;">Top Security Event Source IPs</div>
+        <ul style="list-style:none;padding:0;margin:0;font-size:0.78rem;">
+          ${topIps.length > 0 ? topIps.map(([ip, cnt]) => `
+            <li style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid #F1F5F9;">
+              <code style="font-family:var(--font-mono);">${escHtml(ip)}</code>
+              <span style="font-weight:600;color:#475569;">${cnt} events</span>
+            </li>
+          `).join('') : '<li style="color:#94A3B8;">No IP activity logged yet</li>'}
+        </ul>
+      </div>
+      <div>
+        <div class="report-section-title" style="margin-top:0;">Top Targeted User Identities</div>
+        <ul style="list-style:none;padding:0;margin:0;font-size:0.78rem;">
+          ${topUsers.length > 0 ? topUsers.map(([usr, cnt]) => `
+            <li style="display:flex;justify-content:space-between;padding:5px 8px;border-bottom:1px solid #F1F5F9;">
+              <code style="font-family:var(--font-mono);">${escHtml(usr)}</code>
+              <span style="font-weight:600;color:#475569;">${cnt} events</span>
+            </li>
+          `).join('') : '<li style="color:#94A3B8;">No user activity logged yet</li>'}
+        </ul>
+      </div>
+    </div>
+
+    <div class="report-section-title">Mandatory SOC Remediation Checklist</div>
+    <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;padding:12px 16px;font-size:0.78rem;line-height:1.6;color:#334155;">
+      <div>&#9633; <strong>Boundary Defense:</strong> Inspect firewall logs and temporarily block high-frequency failed authentication origin IPs.</div>
+      <div>&#9633; <strong>Identity Audit:</strong> Verify multi-factor authentication (MFA) enforcement on flagged accounts (Administrator, test, service accounts).</div>
+      <div>&#9633; <strong>Session Invalidation:</strong> Force immediate token expiration and credential change for accounts impacted by anomalous credential reuse.</div>
+      <div>&#9633; <strong>Evidence Archival:</strong> Retain raw CSV logs exported from this session in tamper-evident cold storage for regulatory compliance.</div>
+    </div>
+  `;
+
+  dom.reportModal.style.display = 'flex';
+}
+
 // ── Init ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   setupTableSorting();
@@ -774,6 +1561,11 @@ document.addEventListener('DOMContentLoaded', () => {
   setupFileAnalysis();
   setupStreamControls();
   setupElevation();
+  setupThreatModal();
+  setupDossier();
+  setupExportFeatures();
+  initVelocityChart();
   checkAdminStatus();
+  loadHistory();
   connectSSE();
 });

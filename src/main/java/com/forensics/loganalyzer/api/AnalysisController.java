@@ -23,11 +23,13 @@ import java.util.stream.Collectors;
 public class AnalysisController {
 
     private final LiveMonitorService liveMonitorService;
+    private final com.forensics.loganalyzer.storage.StorageService storageService;
     private final ThreatDetector threatDetector = new ThreatDetector();
     private final LogReader logReader = new LogReader();
 
-    public AnalysisController(LiveMonitorService liveMonitorService) {
+    public AnalysisController(LiveMonitorService liveMonitorService, com.forensics.loganalyzer.storage.StorageService storageService) {
         this.liveMonitorService = liveMonitorService;
+        this.storageService = storageService;
     }
 
     /** SSE stream � clients subscribe here for real-time log and threat events. */
@@ -40,6 +42,48 @@ public class AnalysisController {
     @GetMapping("/status")
     public Map<String, Object> status() {
         return liveMonitorService.getStatus();
+    }
+
+    /** Historical logs and threats for initial load / page refresh. */
+    @GetMapping("/history")
+    public Map<String, Object> history() {
+        return liveMonitorService.getInitialState();
+    }
+
+    /** Clear all persisted logs and threats from database and session buffer. */
+    @DeleteMapping("/history")
+    public Map<String, Object> clearHistory() {
+        liveMonitorService.clearAll();
+        return Map.of("status", "cleared");
+    }
+
+    /** Retrieve deep forensic dossier for an IP or username. */
+    @GetMapping("/dossier")
+    public Map<String, Object> getDossier(
+            @RequestParam(name = "type", defaultValue = "ip") String type,
+            @RequestParam(name = "value") String value) {
+        return storageService.getEntityDossier(type, value);
+    }
+
+    /** Export audit logs in standard RFC 4180 CSV format. */
+    @GetMapping(value = "/export/csv", produces = "text/csv")
+    public org.springframework.http.ResponseEntity<String> exportCsv() {
+        StringBuilder csv = new StringBuilder();
+        csv.append("Timestamp,Username,IP_Address,Action,StatusCode,Source,RawLine\n");
+        for (com.forensics.loganalyzer.storage.PersistedLogEntry e : storageService.getAllLogsForExport()) {
+            csv.append(String.format("\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\"\n",
+                    e.getTimestamp(),
+                    e.getUsername() == null ? "" : e.getUsername().replace("\"", "\"\""),
+                    e.getIpAddress() == null ? "" : e.getIpAddress().replace("\"", "\"\""),
+                    e.getAction(),
+                    e.getStatusCode(),
+                    e.getSource() == null ? "" : e.getSource(),
+                    e.getRawLine() == null ? "" : e.getRawLine().replace("\"", "\"\"")
+            ));
+        }
+        return org.springframework.http.ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"logsentinel-audit.csv\"")
+                .body(csv.toString());
     }
 
     /** One-shot historical analysis via multipart file upload. */
@@ -69,6 +113,9 @@ public class AnalysisController {
     private AnalysisResponse analyze(Path path) throws IOException {
         LogReadResult result = logReader.readWithReport(path);
         List<ThreatEvent> threats = threatDetector.detect(result.entries());
+
+        storageService.saveLogEntries(result.entries(), "FILE_ANALYSIS");
+        storageService.saveThreats(threats, "FILE_ANALYSIS");
 
         List<LogEntryDto> entries = result.entries().stream().map(LogEntryDto::from).collect(Collectors.toList());
         List<ThreatEventDto> threatDtos = threats.stream().map(ThreatEventDto::from).collect(Collectors.toList());

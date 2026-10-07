@@ -9,3 +9,9 @@ out/
 bin/
 reports/
 *.log.1
+data/
+*.mv.db
+*.trace.db
+node_modules/
+frontend/
+
